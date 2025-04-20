@@ -11,12 +11,9 @@ jobs:
     
     steps:
       - name: Checkout the repository
-        uses: actions/checkout@v3
-        id: checkout  # מזהה את השלב הזה למעקב
-        continue-on-error: false  # אם השלב נכשל, נעצור את ה־workflow
-        run: |
-          echo "Checked out repository"
-          git status  # הדפסת מצב המאגר לאחר השאיבה
+        uses: actions/checkout@v3  # פעולת checkout לסטור את המאגר
+        with:
+          fetch-depth: 0  # חשוב לוודא שאתה שואב את כל ההיסטוריה של המאגר
 
       - name: Install Python and git-filter-repo
         run: |
