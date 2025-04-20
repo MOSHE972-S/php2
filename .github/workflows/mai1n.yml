@@ -1,0 +1,58 @@
+name: Remove .env from history automatically
+
+on:
+  push:
+    branches:
+      - main  # ענף שאתה רוצה להפעיל עליו את ה־workflow
+
+jobs:
+  remove-env-history:
+    runs-on: ubuntu-latest  # נריץ על סביבה מנוהלת של GitHub Actions
+    
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v3  # פעולת checkout לסטור את המאגר
+        with:
+          fetch-depth: 0  # חשוב לוודא שאתה שואב את כל ההיסטוריה של המאגר
+
+      - name: Check if python3 and git-filter-repo are installed
+        run: |
+          echo "Checking if python3 and git-filter-repo are already installed..."
+          python3 --version || { echo "python3 not found! Installing..." && sudo apt-get install -y python3-pip; }
+          git-filter-repo --version || { echo "git-filter-repo not found! Installing..." && sudo apt-get install -y python3-pip && pip3 install git-filter-repo; }
+          echo "Both python3 and git-filter-repo are installed."
+
+      - name: Configure git user
+        run: |
+          echo "Configuring git user..."
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          git config --list  # הדפסת כל הגדרות ה־git
+
+      - name: Run git filter-repo to remove .env from history
+        run: |
+          echo "Running git filter-repo..."
+          git filter-repo --path .env --invert-paths --force
+          echo ".env has been removed from history."
+
+      - name: Check git status after filter-repo
+        run: |
+          echo "Checking git status..."
+          git status  # הדפסת מצב ה־git לאחר שינוי ההיסטוריה
+
+      - name: Commit changes if any
+        run: |
+          echo "Checking if there are any changes to commit..."
+          git diff --exit-code || {
+            echo "Changes detected, committing..."
+            git add .
+            git commit -m "Remove .env from history"
+            git log --oneline -n 5  # הדפסת חמשת הקומיטים האחרונים לבדוק שהכל בסדר
+          }
+          echo "No changes to commit."
+
+      - name: Push changes to repository
+        run: |
+          echo "Pushing changes to remote repository..."
+          git push origin main --force  # דחיפת השינויים עם --force
+          echo "Changes have been pushed to the remote repository."
