@@ -40,6 +40,12 @@ jobs:
           echo "Checking git status..."
           git status  # הדפסת מצב ה־git לאחר שינוי ההיסטוריה
 
+      - name: Remove .env from working tree
+        run: |
+          echo "Removing .env from working tree..."
+          rm -f .env  # מוחק את הקובץ .env מה־working tree
+          git status  # לוודא שהקובץ נמחק מה־working tree
+
       - name: Commit changes if any
         run: |
           echo "Checking if there are any changes to commit..."
@@ -51,8 +57,14 @@ jobs:
           }
           echo "No changes to commit."
 
+      - name: Set up remote repository
+        run: |
+          echo "Setting up remote repository..."
+          git remote set-url origin https://github.com/${{ github.repository }}.git  # הגדרת כתובת ה־origin
+          git remote -v  # הדפסת את כתובת ה־remote
+
       - name: Push changes to repository
         run: |
           echo "Pushing changes to remote repository..."
-          git push origin main --force  # דחיפת השינויים עם --force
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git main --force  # דחיפת השינויים עם --force
           echo "Changes have been pushed to the remote repository."
