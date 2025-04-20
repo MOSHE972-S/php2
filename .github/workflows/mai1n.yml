@@ -3,68 +3,91 @@ name: Remove .env from history automatically
 on:
   push:
     branches:
-      - main  # ענף שאתה רוצה להפעיל עליו את ה־workflow
+      - main
+  workflow_dispatch:
 
 jobs:
   remove-env-history:
-    runs-on: ubuntu-latest  # נריץ על סביבה מנוהלת של GitHub Actions
-    
+    runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout the repository
-        uses: actions/checkout@v3  # פעולת checkout לסטור את המאגר
+      - name: Checkout repository (full history)
+        uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # חשוב לוודא שאתה שואב את כל ההיסטוריה של המאגר
-
-      - name: Check if python3 and git-filter-repo are installed
+          fetch-depth: 0
+      - name: Verify checkout
         run: |
-          echo "Checking if python3 and git-filter-repo are already installed..."
-          python3 --version || { echo "python3 not found! Installing..." && sudo apt-get install -y python3-pip; }
-          git-filter-repo --version || { echo "git-filter-repo not found! Installing..." && sudo apt-get install -y python3-pip && pip3 install git-filter-repo; }
-          echo "Both python3 and git-filter-repo are installed."
+          echo "=== Git branches and remotes ==="
+          git branch -vv
+          git remote -v
 
-      - name: Configure git user
+      - name: Ensure python3 & git-filter-repo
         run: |
-          echo "Configuring git user..."
+          echo "=== Checking python3 ==="
+          python3 --version || { echo "python3 not found! Installing..." && sudo apt-get update && sudo apt-get install -y python3-pip; }
+          echo "=== Checking git-filter-repo ==="
+          command -v git-filter-repo || { echo "git-filter-repo not found! Installing..." && pip3 install git-filter-repo; }
+          echo "=== python3 & git-filter-repo ready ==="
+
+      - name: Configure Git user
+        run: |
+          echo "=== Configuring Git user ==="
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
-          git config --list  # הדפסת כל הגדרות ה־git
+          echo "--- git config list ---"
+          git config --list
 
-      - name: Run git filter-repo to remove .env from history
+      - name: Remove .env from history
         run: |
-          echo "Running git filter-repo..."
-          git filter-repo --path .env --invert-paths --force
-          echo ".env has been removed from history."
+          echo "=== Running git filter-repo ==="
+          git filter-repo --path .env --invert-paths --force \
+            && echo "✅ .env removed from history" \
+            || { echo "❌ git-filter-repo failed" && exit 1; }
 
-      - name: Check git status after filter-repo
+      - name: Show status after filter-repo
         run: |
-          echo "Checking git status..."
-          git status  # הדפסת מצב ה־git לאחר שינוי ההיסטוריה
+          echo "=== Git status after filter-repo ==="
+          git status
 
       - name: Remove .env from working tree
         run: |
-          echo "Removing .env from working tree..."
-          rm -f .env  # מוחק את הקובץ .env מה־working tree
-          git status  # לוודא שהקובץ נמחק מה־working tree
+          echo "=== Removing .env from working tree if exists ==="
+          if [ -f .env ]; then
+            rm .env
+            echo "✅ .env deleted"
+          else
+            echo "ℹ️ .env not present in working tree"
+          fi
+          git status
 
-      - name: Commit changes if any
+      - name: Commit changes if detected
         run: |
-          echo "Checking if there are any changes to commit..."
-          git diff --exit-code || {
-            echo "Changes detected, committing..."
+          echo "=== Checking for changes ==="
+          git diff --exit-code || CHANGED=true
+          if [ "$CHANGED" == "true" ]; then
+            echo "🔄 Changes detected, committing..."
             git add .
-            git commit -m "Remove .env from history"
-            git log --oneline -n 5  # הדפסת חמשת הקומיטים האחרונים לבדוק שהכל בסדר
-          }
-          echo "No changes to commit."
+            git commit -m "ci: remove .env from history and working tree"
+            echo "--- Last 5 commits ---"
+            git log --oneline -n 5
+          else
+            echo "ℹ️ No changes to commit"
+          fi
 
-      - name: Set up remote repository
+      - name: Setup remote origin
         run: |
-          echo "Setting up remote repository..."
-          git remote set-url origin https://github.com/${{ github.repository }}.git  # הגדרת כתובת ה־origin
-          git remote -v  # הדפסת את כתובת ה־remote
+          echo "=== Ensuring remote 'origin' is set ==="
+          git remote get-url origin \
+            && echo "✅ origin exists: $(git remote get-url origin)" \
+            || {
+              echo "ℹ️ origin missing, adding..."
+              git remote add origin https://github.com/${{ github.repository }}.git
+            }
+          git remote -v
 
-      - name: Push changes to repository
+      - name: Push commits (force)
         run: |
-          echo "Pushing changes to remote repository..."
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git main --force  # דחיפת השינויים עם --force
-          echo "Changes have been pushed to the remote repository."
+          echo "=== Pushing to remote ==="
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git main --force \
+            && echo "✅ Push succeeded" \
+            || { echo "❌ Push failed" && exit 1; }
