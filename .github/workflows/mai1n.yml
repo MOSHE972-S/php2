@@ -1,5 +1,9 @@
 name: Remove .env from history automatically
 
+# מאתחל את GITHUB_TOKEN עם הרשאת כתיבה לתוכן
+permissions:
+  contents: write
+
 on:
   push:
     branches:
@@ -15,6 +19,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+
       - name: Verify checkout
         run: |
           echo "=== Git branches and remotes ==="
@@ -74,20 +79,9 @@ jobs:
             echo "ℹ️ No changes to commit"
           fi
 
-      - name: Setup remote origin
+      - name: Push changes to repository
         run: |
-          echo "=== Ensuring remote 'origin' is set ==="
-          git remote get-url origin \
-            && echo "✅ origin exists: $(git remote get-url origin)" \
-            || {
-              echo "ℹ️ origin missing, adding..."
-              git remote add origin https://github.com/${{ github.repository }}.git
-            }
-          git remote -v
-
-      - name: Push commits (force)
-        run: |
-          echo "=== Pushing to remote ==="
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git main --force \
+          echo "=== Pushing to remote via origin ==="
+          git push origin main --force \
             && echo "✅ Push succeeded" \
             || { echo "❌ Push failed" && exit 1; }
