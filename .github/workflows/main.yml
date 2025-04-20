@@ -1,0 +1,30 @@
+name: Remove .env from history
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # הטריגר החדש להפעלה ידנית
+
+jobs:
+  remove-env-history:
+    runs-on: self-hosted  # זה מציין שה־runner שלך פועל כאן
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Remove .env from history
+        run: |
+          # התקנת git-filter-repo אם לא קיים
+          pip install git-filter-repo
+          
+          # הפעלת git filter-repo למחיקת .env
+          git filter-repo --path .env --invert-paths --force
+
+          # מחויב מחדש עם היסטוריה חדשה
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          git add .env
+          git commit -m "Remove .env from history"
+          git push origin main --force
