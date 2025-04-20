@@ -1,4 +1,4 @@
-name: Remove .env from history automatically
+name: Ensure .env is fully removed
 
 permissions:
   contents: write
@@ -10,21 +10,15 @@ on:
   workflow_dispatch:
 
 jobs:
-  remove-env-history:
+  remove-env:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository (full history)
+      - name: Checkout full history
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
           persist-credentials: true
-
-      - name: Verify checkout
-        run: |
-          echo "=== Git branches and remotes before any change ==="
-          git branch -vv
-          git remote -v || echo "⚠️ No remotes defined yet"
 
       - name: Ensure python3 & git-filter-repo
         run: |
@@ -39,59 +33,35 @@ jobs:
           echo "=== Configuring Git user ==="
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
-          echo "--- git config list ---"
           git config --list
 
       - name: Remove .env from history
         run: |
           echo "=== Running git filter-repo ==="
           git filter-repo --path .env --invert-paths --force \
-            && echo "✅ .env removed from history" \
+            && echo "✅ .env stripped from all history" \
             || { echo "❌ git-filter-repo failed" && exit 1; }
 
-      - name: Show status after filter-repo
+      - name: Ensure .env absent in working tree
         run: |
-          echo "=== Git status after filter-repo ==="
+          echo "=== Deleting .env in working tree (if exists) ==="
+          rm -f .env
+          echo "Working-tree status after rm:"
           git status
 
-      - name: Remove .env from working tree
+      - name: Commit removal (always)
         run: |
-          echo "=== Removing .env from working tree if exists ==="
-          if [ -f .env ]; then
-            rm .env
-            echo "✅ .env deleted"
-          else
-            echo "ℹ️ .env not present in working tree"
-          fi
-          git status
+          echo "=== Staging and committing deletion (or empty commit) ==="
+          # stage deletion (no-op if file not present)
+          git rm -f .env || true
+          # allow empty commit so we always record an action
+          git commit -m "ci: ensure .env removed from history and working tree" --allow-empty
+          echo "--- Last 5 commits ---"
+          git log --oneline -n 5
 
-      - name: Commit changes if detected
+      - name: Push to main (force)
         run: |
-          echo "=== Checking for changes ==="
-          CHANGED=false
-          git diff --quiet || CHANGED=true
-          if [ "$CHANGED" = "true" ]; then
-            echo "🔄 Changes detected, committing..."
-            git add .
-            git commit -m "ci: remove .env from history and working tree"
-            echo "--- Last 5 commits ---"
-            git log --oneline -n 5
-          else
-            echo "ℹ️ No changes to commit"
-          fi
-
-      - name: Ensure origin remote with credentials
-        run: |
-          echo "=== Ensuring 'origin' remote is set with GITHUB_TOKEN ==="
-          # אם אין origin, נוסיף אותו
-          git remote get-url origin || git remote add origin https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
-          # ועדכן כל מקרה שהכתובת תהיה עם הטוקן
-          git remote set-url origin https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
-          git remote -v
-
-      - name: Push commits (force)
-        run: |
-          echo "=== Pushing to origin main --force ==="
+          echo "=== Pushing to main with --force ==="
           git push origin main --force \
             && echo "✅ Push succeeded" \
             || { echo "❌ Push failed" && exit 1; }
