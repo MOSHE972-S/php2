@@ -1,6 +1,5 @@
 name: Remove .env from history automatically
 
-# מאתחל את GITHUB_TOKEN עם הרשאת כתיבה לתוכן
 permissions:
   contents: write
 
@@ -19,12 +18,13 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          persist-credentials: true
 
       - name: Verify checkout
         run: |
-          echo "=== Git branches and remotes ==="
+          echo "=== Git branches and remotes before any change ==="
           git branch -vv
-          git remote -v
+          git remote -v || echo "⚠️ No remotes defined yet"
 
       - name: Ensure python3 & git-filter-repo
         run: |
@@ -68,8 +68,9 @@ jobs:
       - name: Commit changes if detected
         run: |
           echo "=== Checking for changes ==="
-          git diff --exit-code || CHANGED=true
-          if [ "$CHANGED" == "true" ]; then
+          CHANGED=false
+          git diff --quiet || CHANGED=true
+          if [ "$CHANGED" = "true" ]; then
             echo "🔄 Changes detected, committing..."
             git add .
             git commit -m "ci: remove .env from history and working tree"
@@ -79,9 +80,18 @@ jobs:
             echo "ℹ️ No changes to commit"
           fi
 
-      - name: Push changes to repository
+      - name: Ensure origin remote with credentials
         run: |
-          echo "=== Pushing to remote via origin ==="
+          echo "=== Ensuring 'origin' remote is set with GITHUB_TOKEN ==="
+          # אם אין origin, נוסיף אותו
+          git remote get-url origin || git remote add origin https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          # ועדכן כל מקרה שהכתובת תהיה עם הטוקן
+          git remote set-url origin https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          git remote -v
+
+      - name: Push commits (force)
+        run: |
+          echo "=== Pushing to origin main --force ==="
           git push origin main --force \
             && echo "✅ Push succeeded" \
             || { echo "❌ Push failed" && exit 1; }
