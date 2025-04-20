@@ -3,32 +3,62 @@ name: Remove .env from history automatically
 on:
   push:
     branches:
-      - main  # או ענף אחר
+      - main  # ענף שאתה רוצה להפעיל עליו את ה־workflow
 
 jobs:
   remove-env-history:
-    runs-on: ubuntu-latest  # GitHub Actions יפעיל את ה־workflow על סביבה מנוהלת
+    runs-on: ubuntu-latest  # נריץ על סביבה מנוהלת של GitHub Actions
     
     steps:
       - name: Checkout the repository
-        uses: actions/checkout@v3  # שולף את המאגר
-
-      - name: Set up Python and install git-filter-repo
+        uses: actions/checkout@v3
+        id: checkout  # מזהה את השלב הזה למעקב
+        continue-on-error: false  # אם השלב נכשל, נעצור את ה־workflow
         run: |
-          # התקנת Python אם הוא לא קיים
-          sudo apt-get install python3-pip
-          pip install git-filter-repo  # התקנה של הכלי
+          echo "Checked out repository"
+          git status  # הדפסת מצב המאגר לאחר השאיבה
 
-      - name: Remove .env from history using git-filter-repo
+      - name: Install Python and git-filter-repo
         run: |
+          echo "Installing dependencies..."
+          sudo apt-get update
+          sudo apt-get install -y python3-pip
+          pip3 install git-filter-repo
+          echo "Dependencies installed."
+
+      - name: Verify git-filter-repo installation
+        run: |
+          echo "Verifying git-filter-repo installation..."
+          which git-filter-repo || { echo "git-filter-repo not found!" && exit 1; }
+          echo "git-filter-repo is installed successfully."
+
+      - name: Configure git user
+        run: |
+          echo "Configuring git user..."
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
-          
-          # הפעלת git filter-repo למחיקת .env
-          git filter-repo --path .env --invert-paths --force  # מחיקת כל ההיסטוריה של הקובץ
+          git config --list  # הדפסת כל הגדרות ה־git
 
-      - name: Commit changes and force push
+      - name: Run git filter-repo to remove .env from history
         run: |
+          echo "Running git filter-repo..."
+          git filter-repo --path .env --invert-paths --force
+          echo ".env has been removed from history."
+
+      - name: Check git status after filter-repo
+        run: |
+          echo "Checking git status..."
+          git status  # הדפסת מצב ה־git לאחר שינוי ההיסטוריה
+
+      - name: Commit changes
+        run: |
+          echo "Committing changes..."
           git add .
           git commit -m "Remove .env from history"
+          git log --oneline -n 5  # הדפסת חמשת הקומיטים האחרונים לבדוק שהכל בסדר
+
+      - name: Push changes to repository
+        run: |
+          echo "Pushing changes to remote repository..."
           git push origin main --force  # דחיפת השינויים עם --force
+          echo "Changes have been pushed to the remote repository."
